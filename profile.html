@@ -359,6 +359,48 @@
             </form>
         </div>
 
+        <!-- API Configuration Card -->
+        <div class="profile-card">
+            <div class="card-header">
+                <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                    <line x1="8" y1="21" x2="16" y2="21"/>
+                    <line x1="12" y1="17" x2="12" y2="21"/>
+                </svg>
+                <h2 class="card-title">API Configuration</h2>
+            </div>
+            <p class="card-subtitle">Configure your OpenRouter API key for AI responses.</p>
+            
+            <form id="apiKeyForm">
+                <div class="form-group">
+                    <label class="form-label">OpenRouter API Key</label>
+                    <input type="password" id="apiKeyInput" class="form-input" placeholder="Enter your OpenRouter API key" autocomplete="off">
+                    <p class="email-note">Your API key is stored locally and never sent to our servers. Get your key from <a href="https://openrouter.ai/keys" target="_blank" class="contact-link">OpenRouter</a>.</p>
+                </div>
+                
+                <div class="api-key-status" id="apiKeyStatus" style="margin-bottom: 16px; padding: 8px 12px; border-radius: 6px; font-size: 14px; display: none;">
+                    <span id="statusText"></span>
+                </div>
+                
+                <button type="submit" class="save-btn" id="saveApiKeyBtn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                        <polyline points="17,21 17,13 7,13 7,21"/>
+                        <polyline points="7,3 7,8 15,8"/>
+                    </svg>
+                    Save API Key
+                </button>
+                
+                <button type="button" class="save-btn" id="clearApiKeyBtn" style="background: #dc3545; margin-top: 8px;" onclick="clearApiKey()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3,6 5,6 21,6"/>
+                        <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                    </svg>
+                    Clear API Key
+                </button>
+            </form>
+        </div>
+
         <!-- Account Information Card -->
         <div class="profile-card">
             <div class="card-header">
@@ -424,6 +466,80 @@
             Please email <a href="mailto:help@uncensored.ai" class="contact-link">help@uncensored.ai</a> with any questions or to upgrade or cancel your subscription.
         </div>
     </div>
+
+    <script>
+        // Load saved API key on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadApiKey();
+        });
+
+        // Handle API key form submission
+        document.getElementById('apiKeyForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            saveApiKey();
+        });
+
+        function loadApiKey() {
+            const savedApiKey = localStorage.getItem('openrouter_api_key');
+            if (savedApiKey) {
+                document.getElementById('apiKeyInput').value = savedApiKey;
+                showStatus('API key loaded successfully', 'success');
+            }
+        }
+
+        function saveApiKey() {
+            const apiKey = document.getElementById('apiKeyInput').value.trim();
+            
+            if (!apiKey) {
+                showStatus('Please enter an API key', 'error');
+                return;
+            }
+
+            // Basic validation for OpenRouter API key format
+            if (!apiKey.startsWith('sk-or-')) {
+                showStatus('Invalid API key format. OpenRouter keys start with "sk-or-"', 'error');
+                return;
+            }
+
+            try {
+                localStorage.setItem('openrouter_api_key', apiKey);
+                showStatus('API key saved successfully!', 'success');
+            } catch (error) {
+                showStatus('Failed to save API key. Please try again.', 'error');
+            }
+        }
+
+        function clearApiKey() {
+            if (confirm('Are you sure you want to clear your API key?')) {
+                localStorage.removeItem('openrouter_api_key');
+                document.getElementById('apiKeyInput').value = '';
+                showStatus('API key cleared successfully', 'success');
+            }
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('apiKeyStatus');
+            const statusText = document.getElementById('statusText');
+            
+            statusText.textContent = message;
+            statusDiv.style.display = 'block';
+            
+            if (type === 'success') {
+                statusDiv.style.backgroundColor = '#d1fae5';
+                statusDiv.style.color = '#065f46';
+                statusDiv.style.border = '1px solid #a7f3d0';
+            } else {
+                statusDiv.style.backgroundColor = '#fee2e2';
+                statusDiv.style.color = '#991b1b';
+                statusDiv.style.border = '1px solid #fca5a5';
+            }
+            
+            // Hide status after 3 seconds
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 3000);
+        }
+    </script>
 </body>
 
 </html>

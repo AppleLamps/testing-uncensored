@@ -740,11 +740,19 @@ async function getAIResponse(userMessage, attachments = []) {
             content: content
         });
         
+        // Get API key from localStorage
+        const apiKey = localStorage.getItem('openrouter_api_key');
+        if (!apiKey) {
+            removeTypingIndicator();
+            addMessage('ai', 'Please configure your OpenRouter API key in the Profile page to use AI features.');
+            return;
+        }
+        
         // Make API call to OpenRouter
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
             headers: {
-                'Authorization': 'Bearer YOUR_OPENROUTER_API_KEY', // Replace with your actual API key
+                'Authorization': `Bearer ${apiKey}`,
                 'HTTP-Referer': window.location.origin,
                 'X-Title': 'Uncensored AI Chat',
                 'Content-Type': 'application/json'
