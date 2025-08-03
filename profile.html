@@ -7,12 +7,20 @@
     <title>Profile - Uncensored AI</title>
     <link rel="stylesheet" href="styles.css">
     <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: auto;
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
         .profile-container {
             max-width: 600px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 20px 20px 40px 20px;
             background: #f8f9fa;
             min-height: 100vh;
+            overflow-y: auto;
         }
         
         .profile-header {
@@ -140,6 +148,17 @@
             font-size: 13px;
             color: var(--text-secondary);
             margin-top: 8px;
+        }
+        
+        .email-warning {
+            font-size: 13px;
+            color: #6b7280;
+            margin-top: 6px;
+            margin-bottom: 16px;
+            padding: 8px 12px;
+            background: #f9fafb;
+            border-radius: 6px;
+            border-left: 3px solid #d1d5db;
         }
         
         .save-btn {
@@ -345,7 +364,7 @@
                         </svg>
                         <input type="email" class="form-input" value="john.doe@example.com" disabled>
                     </div>
-                    <p class="email-note">Email cannot be changed. Contact support if you need to update it.</p>
+                    <p class="email-warning">Email cannot be changed. Contact support if you need to update it.</p>
                 </div>
                 
                 <button type="submit" class="save-btn">

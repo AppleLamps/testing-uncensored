@@ -289,10 +289,12 @@ function renderMessage(message) {
             </div>
             ${actionButtons}`;
     } else {
+        // Apply markdown formatting to AI messages
+        const formattedText = formatMarkdown(message.text);
         wrap.innerHTML = `
             <div class="ai-icon message-icon"></div>
             <div class="message-bubble">
-                <p>${message.text}</p>
+                ${formattedText}
                 ${message.hasUpgrade ? '<button class="upgrade-btn">Upgrade to Pro</button>' : ''}
                 ${attachmentsHTML}
             </div>
@@ -748,7 +750,7 @@ async function getAIResponse(userMessage, attachments = []) {
             return;
         }
         
-        // Make API call to OpenRouter
+        // Make streaming API call to OpenRouter
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -759,7 +761,8 @@ async function getAIResponse(userMessage, attachments = []) {
             },
             body: JSON.stringify({
                 model: 'x-ai/grok-3',
-                messages: messages
+                messages: messages,
+                stream: true
             })
         });
         
@@ -767,12 +770,9 @@ async function getAIResponse(userMessage, attachments = []) {
             throw new Error(`API request failed: ${response.status} ${response.statusText}`);
         }
         
-        const data = await response.json();
-        const aiResponse = data.choices[0]?.message?.content || 'Sorry, I couldn\'t generate a response.';
-        
-        // Remove typing indicator and add AI response
+        // Remove typing indicator and start streaming response
         removeTypingIndicator();
-        addMessage('ai', aiResponse);
+        await handleStreamingResponse(response);
         
     } catch (error) {
         console.error('Error getting AI response:', error);
@@ -814,6 +814,179 @@ function removeTypingIndicator() {
     if (typingIndicator) {
         typingIndicator.remove();
     }
+}
+
+async function handleStreamingResponse(response) {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    
+    // Create streaming message container
+    const messageWrapper = document.createElement('div');
+    messageWrapper.className = 'message-wrapper ai-message streaming-message';
+    
+    const actionButtons = `
+        <div class="message-actions">
+            <button class="action-btn" data-action="copy" title="Copy">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+                    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+                </svg>
+            </button>
+            <button class="action-btn" data-action="like" title="Like">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M7 10v12l4-4 4 4V10"/>
+                    <path d="M5 6h14l-1 4H6z"/>
+                </svg>
+            </button>
+            <button class="action-btn" data-action="dislike" title="Dislike">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M17 14V2l-4 4-4-4v12"/>
+                    <path d="M19 18H5l1-4h12z"/>
+                </svg>
+            </button>
+            <button class="action-btn" data-action="share" title="Share">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+                    <polyline points="16,6 12,2 8,6"/>
+                    <line x1="12" y1="2" x2="12" y2="15"/>
+                </svg>
+            </button>
+            <button class="action-btn" data-action="more" title="More">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <circle cx="12" cy="12" r="1"/>
+                    <circle cx="19" cy="12" r="1"/>
+                    <circle cx="5" cy="12" r="1"/>
+                </svg>
+            </button>
+        </div>
+    `;
+    
+    messageWrapper.innerHTML = `
+        <div class="ai-icon message-icon"></div>
+        <div class="message-bubble">
+            <div class="message-content"></div>
+        </div>
+        ${actionButtons}
+    `;
+    
+    const messageContent = messageWrapper.querySelector('.message-content');
+    chatArea.appendChild(messageWrapper);
+    setupMessageActionListeners(messageWrapper);
+    
+    let fullContent = '';
+    
+    try {
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            const chunk = decoder.decode(value);
+            const lines = chunk.split('\n');
+            
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    const data = line.slice(6);
+                    if (data === '[DONE]') {
+                        break;
+                    }
+                    
+                    try {
+                        const parsed = JSON.parse(data);
+                        const content = parsed.choices?.[0]?.delta?.content;
+                        if (content) {
+                            fullContent += content;
+                            messageContent.innerHTML = formatMarkdown(fullContent);
+                            scrollToBottom();
+                        }
+                    } catch (e) {
+                        // Skip invalid JSON chunks
+                    }
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Streaming error:', error);
+        if (!fullContent) {
+            messageContent.innerHTML = '<p>Sorry, there was an error receiving the response.</p>';
+        }
+    }
+    
+    // Save the complete message to chat history
+    if (currentChatId && chats[currentChatId] && fullContent) {
+        const message = {
+            sender: 'ai',
+            text: fullContent,
+            timestamp: new Date().toISOString()
+        };
+        chats[currentChatId].messages.push(message);
+        chats[currentChatId].lastUpdated = new Date().toISOString();
+        saveChatsToStorage();
+    }
+    
+    // Remove streaming class
+    messageWrapper.classList.remove('streaming-message');
+}
+
+function formatMarkdown(text) {
+    if (!text) return '';
+    
+    // Escape HTML first
+    let html = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    
+    // Code blocks (triple backticks)
+    html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+    
+    // Inline code (single backticks)
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+    
+    // Bold text (**text** or __text__)
+    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+    
+    // Italic text (*text* or _text_)
+    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
+    
+    // Headers
+    html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+    html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+    html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+    
+    // Unordered lists
+    html = html.replace(/^[*+-] (.+)$/gm, '<li>$1</li>');
+    html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+    
+    // Ordered lists
+    html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+    // This regex handles numbered lists by wrapping consecutive <li> elements
+    html = html.replace(/((?:<li>(?:(?!<\/li>)[\s\S])*<\/li>\s*)+)/g, function(match) {
+        if (match.includes('<ul>')) return match; // Already wrapped
+        return '<ol>' + match + '</ol>';
+    });
+    
+    // Handle paragraphs properly
+    // Split by double newlines to create paragraphs
+    const paragraphs = html.split(/\n\n+/);
+    
+    // Process each paragraph
+    html = paragraphs.map(paragraph => {
+        if (!paragraph.trim()) return '';
+        
+        // Replace single newlines with <br> within paragraphs
+        paragraph = paragraph.replace(/\n/g, '<br>');
+        
+        // Don't wrap if already has block-level tags
+        if (paragraph.match(/^<(h[1-6]|ul|ol|pre|div)/)) {
+            return paragraph;
+        }
+        
+        return `<p>${paragraph}</p>`;
+    }).filter(p => p).join('');
+    
+    return html;
 }
 
 /* ===== IMAGE MODAL ===== */
